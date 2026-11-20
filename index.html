@@ -65,6 +65,7 @@ body:not(.rol-admin) .edit-only{display:none!important}
 body:not(.rol-admin):not(.rol-vig) .acc-vig{display:none!important}
 body:not(.rol-admin):not(.rol-sup) .acc-sup{display:none!important}
 body.rol-vig nav button.no-vig{display:none}
+body.rol-sup nav button.no-sup{display:none}
 .rolchip{font-weight:700}
 .note{background:#F0F7F5;border-left:3px solid var(--teal);padding:8px 10px;font-size:12px;border-radius:4px;margin:8px 0}
 .alert{background:var(--redbg);border-left:3px solid var(--red);padding:8px 10px;font-size:12px;border-radius:4px;margin:8px 0}
@@ -84,14 +85,14 @@ body.rol-vig nav button.no-vig{display:none}
   <button class="btn sec sm" id="btnPin" onclick="pedirPin()">🔒 Editar</button>
 </header>
 <nav id="nav">
-  <button data-p="tablero" class="act no-vig">Tablero</button>
-  <button data-p="envios">Envíos</button>
-  <button data-p="recepciones">Recepciones</button>
+  <button data-p="tablero" class="act no-vig no-sup">Tablero</button>
+  <button data-p="envios" class="no-sup">Envíos</button>
+  <button data-p="recepciones" class="no-sup">Recepciones</button>
   <button data-p="paliativos" class="no-vig">Paliativos</button>
-  <button data-p="saldo" class="no-vig">Saldo en lavandería</button>
+  <button data-p="saldo" class="no-vig no-sup">Saldo en lavandería</button>
   <button data-p="dotacion" class="no-vig">Stock y conteos</button>
-  <button data-p="concentrado" class="no-vig">Concentrado</button>
-  <button data-p="config" class="no-vig">Configuración</button>
+  <button data-p="concentrado" class="no-vig no-sup">Concentrado</button>
+  <button data-p="config" class="no-vig no-sup">Configuración</button>
 </nav>
 <main>
 
@@ -477,6 +478,7 @@ function aplicarModo(){
   document.body.classList.remove('rol-admin','rol-sup','rol-vig');if(ROL)document.body.classList.add('rol-'+ROL);
   $('modoTxt').textContent=ROL?ROL_NOMBRE[ROL]:'Solo lectura';$('btnPin').textContent=ROL?'🔓 Salir':'🔒 Entrar con PIN';
   if(ROL==='vig'){const act=(document.querySelector('.page.act')||{}).id;if(act!=='p-envios'&&act!=='p-recepciones')irA('recepciones');}
+  if(ROL==='sup'){const act=(document.querySelector('.page.act')||{}).id;if(act!=='p-paliativos'&&act!=='p-dotacion')irA('paliativos');}
 }
 function pedirPin(){
   if(ROL){ROL='';sessionStorage.removeItem('ropa_rol');aplicarModo();render();return;}
