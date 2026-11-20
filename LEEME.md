@@ -17,7 +17,7 @@ Hay dos archivos:
 4. **Conectar la app.** En `index.html`, al inicio del bloque `<script>`, pegue esa URL:
    ```js
    const GAS_URL = 'https://script.google.com/macros/s/XXXX/exec';
-   const PINS = { 'ROPA1':'admin', 'VIG1':'vig' };
+   const PINS = { 'ROPA1':'admin', 'SUP1':'sup', 'VIG1':'vig' };
    ```
 5. **GitHub Pages.** Cree el repositorio (por ejemplo `cmgasupervisionenfermeria-web/Control-Ropa`), suba `index.html`, y active Pages en Settings → Pages → rama `main`.
 
@@ -29,10 +29,11 @@ Para actualizar el backend sin cambiar la URL: Implementar → Administrar imple
 
 | PIN | Perfil | Qué puede hacer |
 | --- | --- | --- |
-| `ROPA1` | Acceso general | Todo: envíos, recepciones, resurtidos, conteos, stock, ajustes, configuración, corregir y eliminar |
+| `ROPA1` | Compras y Recursos Humanos | Todo: envíos, recepciones, resurtidos, conteos, stock, ajustes con el proveedor, configuración, corregir y eliminar |
+| `SUP1` | Supervisión de Enfermería | Resurtir los stocks de los servicios desde Paliativos y registrar conteos físicos; no edita ni borra |
 | `VIG1` | Vigilancia | Solo ve Envíos y Recepciones; registra entregas de ropa sucia y recepciones de limpia con foto de la nota; no edita ni borra |
 
-Sin PIN la app es de solo lectura. Una captura con error de Vigilancia se corrige con `ROPA1`.
+Sin PIN la app es de solo lectura (Gerencia de Enfermería y Dirección la consultan así). Una captura con error de Vigilancia o de Supervisión se corrige con `ROPA1`.
 
 ## Primer uso
 

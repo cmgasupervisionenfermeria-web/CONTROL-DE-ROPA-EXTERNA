@@ -76,7 +76,7 @@ body.rol-vig nav button.no-vig{display:none}
 <header>
   <div>
     <h1>Control de Ropa Hospitalaria</h1>
-    <div class="sub">Lavandería externa (proveedor) · PRO-ENF-ROP-001 v1.0</div>
+    <div class="sub">Lavandería externa (proveedor) · PRO-ENF-ROP-001 v1.1</div>
   </div>
   <div class="sp"></div>
   <span class="chip"><span class="dot" id="syncDot"></span><span id="syncTxt">Local</span></span>
@@ -226,10 +226,11 @@ body.rol-vig nav button.no-vig{display:none}
 /* ================= CONFIGURACIÓN DE INSTALACIÓN ================= */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwb9z6uQGtN-XYaNOmmrmjL5Qh3eM6Wx7Ed4Hrq6MtY-7Oz2LP9jJWLymfO6OSFqqSIWQ/exec';  // Apps Script (Control de Ropa CMGA)
 const PINS = {             // PIN → perfil
-  'ROPA1':'admin',          // Acceso general (Gerencia y Supervisión de Enfermería)
+  'ROPA1':'admin',          // Acceso general: Compras y Recursos Humanos
+  'SUP1':'sup',             // Supervisión de Enfermería: resurtido de stocks y conteos físicos
   'VIG1':'vig'              // Vigilancia: solo registrar entregas de sucia y recepciones de limpia, con foto de la nota
 };
-const ROL_NOMBRE = {admin:'Acceso general',vig:'Vigilancia'};
+const ROL_NOMBRE = {admin:'Compras y RH',sup:'Supervisión de Enfermería',vig:'Vigilancia'};
 const LS_KEY = 'ropa_cmga_v2';
 const LS_QUEUE = 'ropa_cmga_queue_v2';
 
