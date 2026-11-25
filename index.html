@@ -252,7 +252,7 @@ const PRENDAS_DEF = [
   ['r01','Sábana regular','Ropa de cama'],['r02','Sábana clínica','Ropa de cama'],['r03','Edredón','Ropa de cama'],
   ['r04','Funda de almohada','Ropa de cama'],['r05','Cobertor','Ropa de cama'],
   ['r06','Toalla','Ropa de paciente'],['r07','Bata de paciente','Ropa de paciente'],
-  ['r08','Bata pediátrica','Ropa de paciente'],['r09','Bata bariátrica','Ropa de paciente']
+  ['r08','Bata pediátrica','Ropa de paciente'],['r10','Bata de lactante','Ropa de paciente'],['r09','Bata bariátrica','Ropa de paciente']
 ].map(([id,nombre,grupo])=>({id,nombre,grupo,activo:true}));
 const SERV_DEF = [
   {id:'hosp',nombre:'Hospitalización'},
@@ -293,7 +293,8 @@ function cargarLocal(){
 function normConfig(c){
   const base=configDefault(); if(!c) return base;
   const prendas=c.prendas&&c.prendas.length?c.prendas.slice():base.prendas;
-  base.prendas.forEach(p=>{if(!prendas.some(x=>x.id===p.id))prendas.push({...p});}); // agrega prendas nuevas del catálogo base
+  base.prendas.forEach((p,i)=>{if(prendas.some(x=>x.id===p.id))return; // agrega prendas nuevas del catálogo base, junto a la anterior
+    const ant=i?prendas.findIndex(x=>x.id===base.prendas[i-1].id):-1;if(ant>=0)prendas.splice(ant+1,0,{...p});else prendas.push({...p});});
   return {prendas, servicios:c.servicios&&c.servicios.length?c.servicios:base.servicios,
           dotacion:c.dotacion||base.dotacion, params:{...base.params,...(c.params||{})},
           stockProveedor:{...base.stockProveedor,...(c.stockProveedor||{}),items:{...((c.stockProveedor||{}).items||{})}}};
