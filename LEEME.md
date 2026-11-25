@@ -41,8 +41,11 @@ Sin PIN la app es de solo lectura (Gerencia de Enfermería y Dirección la consu
 2. **Configuración:** revise el catálogo de prendas, los servicios y escriba el nombre del proveedor.
 3. **Stock y conteos:** la app ya trae el stock autorizado de cada servicio (Hospitalización, UCI, UCIM, Quirófano/Recuperación, Urgencias/Endoscopia e Imagen). Si cambia, se corrige ahí y se pulsa **Guardar stock**.
 4. **Saldo en lavandería → + Saldo inicial:** si el proveedor ya tenía ropa de CMGA al arrancar, regístrela una sola vez.
-5. **Paliativos → + Conteo físico de Paliativos:** cuente toda la ropa limpia de Paliativos. Ese conteo es el punto de partida; desde ahí la existencia se mueve sola.
-6. Haga el primer conteo de cada servicio.
+5. **Stock y conteos → Registrar stock del proveedor** (solo `ROPA1`): capture las piezas por prenda que el proveedor entregó, con la fecha y el número de acta o remisión.
+6. **Inventario físico inicial**, todo el mismo día y en el mismo horario (imprima **🖨 Hojas de inventario físico** para contar en papel):
+   - **Paliativos:** toda la ropa limpia de la ropería. Este conteo es el punto de partida; a partir de ahí la existencia se mueve sola.
+   - **Cada servicio:** en **+ Registrar conteo** deje marcada la casilla *Incluir la ropa en uso*. Se capturan dos columnas: **Gabinete** (ropa limpia del stock) y **En uso** (camas y pacientes).
+7. La tabla **Stock entregado por el proveedor · inventario físico** compara lo entregado con lo localizado (Paliativos + gabinetes + en uso + saldo en lavandería) y muestra la diferencia por prenda. Use **🖨 Conciliación** para imprimirla con firmas.
 
 ## Uso diario
 

@@ -64,6 +64,7 @@ textarea{width:100%;min-height:54px}
 body:not(.rol-admin) .edit-only{display:none!important}
 body:not(.rol-admin):not(.rol-vig) .acc-vig{display:none!important}
 body:not(.rol-admin):not(.rol-sup) .acc-sup{display:none!important}
+#tabCnt.sin-uso .col-uso{display:none}
 body.rol-vig nav button.no-vig{display:none}
 body.rol-sup nav button.no-sup{display:none}
 .rolchip{font-weight:700}
@@ -162,6 +163,17 @@ body.rol-sup nav button.no-sup{display:none}
 
 <!-- DOTACIÓN -->
 <section class="page" id="p-dotacion">
+  <div class="card">
+    <div class="row"><h2 style="margin:0">Stock entregado por el proveedor · inventario físico</h2><div class="sp"></div>
+      <label class="f" style="flex-direction:row;align-items:center;gap:6px">Corte al <input type="date" id="fConcil" onchange="renderDotacion()"></label></div>
+    <div id="concilInfo" style="margin-top:8px"></div>
+    <div class="tw" id="tabConcil"></div>
+    <div class="row" style="margin-top:10px"><div class="sp"></div>
+      <button class="btn sec" onclick="imprimirHojaInventario()">🖨 Hojas de inventario físico</button>
+      <button class="btn sec" onclick="imprimirConciliacion()">🖨 Conciliación</button>
+      <button class="btn navy edit-only" onclick="abrirStockProveedor()">Registrar stock del proveedor</button>
+      <button class="btn acc-sup" onclick="abrirConteo()">+ Registrar conteo</button></div>
+  </div>
   <div class="card">
     <div class="row"><h2 style="margin:0">Stock del servicio</h2><div class="sp"></div>
       <select id="selServ" onchange="renderDotacion()"></select></div>
@@ -264,7 +276,7 @@ const STOCK_DEF = {
 function dotacionDefault(){const d={};Object.keys(STOCK_DEF).forEach(s=>{d[s]={};Object.keys(STOCK_DEF[s]).forEach(p=>d[s][p]={stock:STOCK_DEF[s][p]});});return d;}
 const PARAMS_DEF = {diasAlerta:3,diasEscala:7,metaDevolucion:98,metaRechazo:3,metaFaltantes:0.5,metaCobertura:90,metaSuficiencia:100,factorCirculacion:5,proveedor:''};
 const MOTIVOS = ['Manchada','Rota / costura abierta','Húmeda','Mal olor','Sucia / pelusa','Prenda ajena','Otro'];
-function configDefault(){return {prendas:PRENDAS_DEF.map(p=>({...p})),servicios:SERV_DEF.map(s=>({...s})),dotacion:dotacionDefault(),params:{...PARAMS_DEF}};}
+function configDefault(){return {prendas:PRENDAS_DEF.map(p=>({...p})),servicios:SERV_DEF.map(s=>({...s})),dotacion:dotacionDefault(),params:{...PARAMS_DEF},stockProveedor:{items:{},fecha:'',acta:'',recibio:'',obs:''}};}
 
 /* ================= ESTADO ================= */
 let DB = cargarLocal();
@@ -283,7 +295,8 @@ function normConfig(c){
   const prendas=c.prendas&&c.prendas.length?c.prendas.slice():base.prendas;
   base.prendas.forEach(p=>{if(!prendas.some(x=>x.id===p.id))prendas.push({...p});}); // agrega prendas nuevas del catálogo base
   return {prendas, servicios:c.servicios&&c.servicios.length?c.servicios:base.servicios,
-          dotacion:c.dotacion||base.dotacion, params:{...base.params,...(c.params||{})}};
+          dotacion:c.dotacion||base.dotacion, params:{...base.params,...(c.params||{})},
+          stockProveedor:{...base.stockProveedor,...(c.stockProveedor||{}),items:{...((c.stockProveedor||{}).items||{})}}};
 }
 function guardarLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(DB));localStorage.setItem(LS_QUEUE,JSON.stringify(QUEUE));}catch(e){toast('Memoria del navegador llena: conéctese a internet para subir las fotos pendientes',5000);}}
 
@@ -600,7 +613,9 @@ function gridHTML(cols,valores){
   return `<div class="tw" style="max-height:52vh;overflow-y:auto"><table><tr><th>Prenda</th>${cols.map(c=>`<th class="n">${c.label}</th>`).join('')}</tr>${Object.keys(g).map(gr=>`<tr class="grp"><td colspan="${cols.length+1}">${esc(gr)}</td></tr>`+g[gr].map(p=>`<tr><td>${esc(p.nombre)}</td>${cols.map(c=>`<td class="n"><input type="number" min="0" step="1" data-p="${p.id}" data-k="${c.k}" value="${valores&&valores[p.id]&&num(valores[p.id][c.k])?num(valores[p.id][c.k]):''}" oninput="totalGrid()"></td>`).join('')}</tr>`).join('')).join('')}
   <tr class="tot"><td>Total</td>${cols.map(c=>`<td class="n" id="tg-${c.k}">0</td>`).join('')}</tr></table></div>`;
 }
-function totalGrid(){const t={};document.querySelectorAll('#modalBox input[data-p]').forEach(i=>{t[i.dataset.k]=(t[i.dataset.k]||0)+num(i.value);});Object.keys(t).forEach(k=>{const e=$('tg-'+k);if(e)e.textContent=fmt(t[k]);});actualizarDifNota();}
+function totalGrid(){const t={};document.querySelectorAll('#modalBox input[data-p]').forEach(i=>{t[i.dataset.k]=(t[i.dataset.k]||0)+num(i.value);});Object.keys(t).forEach(k=>{const e=$('tg-'+k);if(e)e.textContent=fmt(t[k]);});
+  if($('tabCnt')){let tt=0;document.querySelectorAll('#tabCnt tr[data-cp]').forEach(tr=>{const r=num(tr.querySelector('[data-k=n]').value)+num(tr.querySelector('[data-k=u]').value);tt+=r;tr.querySelector('.ctot').textContent=r?fmt(r):'';});$('tg-t').textContent=fmt(tt);}
+  actualizarDifNota();}
 function leerGrid(){const it={};document.querySelectorAll('#modalBox input[data-p]').forEach(i=>{const v=Math.max(0,Math.round(num(i.value)));if(!v)return;(it[i.dataset.p]=it[i.dataset.p]||{})[i.dataset.k]=v;});return it;}
 function abrirEnvio(id){
   FOTO_MODAL=null;
@@ -785,6 +800,7 @@ function guardarAjuste(tipo,id){
 
 /* ---------- Dotación y conteos ---------- */
 function renderDotacion(){
+  renderConciliacion();
   const sel=$('selServ');const v=sel.value;
   sel.innerHTML=serviciosStock().map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join('');
   sel.value=v&&serviciosStock().some(s=>s.id===v)?v:serviciosStock()[0].id;
@@ -804,7 +820,81 @@ function renderDotacion(){
   $('tabStockMatriz').innerHTML=`<table><tr><th>Prenda</th>${sv.map(x=>`<th class="n">${esc(x.nombre)}</th>`).join('')}<th class="n">Total</th></tr>${prendasActivas().map(p=>{let t=0;const cells=sv.map(x=>{const d=dotacionDe(x.id,p.id).efectiva;t+=d;tot[x.id]=(tot[x.id]||0)+d;return `<td class="n">${d?fmt(d):'—'}</td>`;}).join('');return `<tr><td>${esc(p.nombre)}</td>${cells}<td class="n"><b>${fmt(t)}</b></td></tr>`;}).join('')}
     <tr class="tot"><td>Total</td>${sv.map(x=>`<td class="n">${fmt(tot[x.id]||0)}</td>`).join('')}<td class="n">${fmt(Object.values(tot).reduce((a,b)=>a+b,0))}</td></tr></table>`;
   const L=DB.conteos.slice().sort((a,b)=>(b.fecha+(b.hora||'')).localeCompare(a.fecha+(a.hora||'')));
-  $('tabConteos').innerHTML=L.length?`<table><tr><th>Folio</th><th>Fecha</th><th>Servicio</th><th class="n">Piezas</th><th>Contó</th><th>Supervisó</th><th></th></tr>${L.map(c=>`<tr><td><b>${esc(c.folio)}</b></td><td>${fFecha(c.fecha)} ${esc(c.hora||'')}</td><td>${esc(servicio(c.servicio).nombre)}</td><td class="n">${fmt(totalSimple(c))}</td><td>${esc(c.conto||'')}</td><td>${esc(c.superviso||'')}</td><td style="white-space:nowrap"><button class="btn sec sm edit-only" onclick="abrirConteo('${c.id}')">Editar</button> <button class="btn red sm edit-only" onclick="borrarRegistro('conteos','${c.id}')">✕</button></td></tr>`).join('')}</table>`:'<div class="empty">Sin conteos registrados.</div>';
+  $('tabConteos').innerHTML=L.length?`<table><tr><th>Folio</th><th>Fecha</th><th>Área</th><th class="n">Gabinete / existencia</th><th class="n">En uso</th><th>Contó</th><th>Supervisó</th><th></th></tr>${L.map(c=>`<tr><td><b>${esc(c.folio)}</b></td><td>${fFecha(c.fecha)} ${esc(c.hora||'')}</td><td>${esc(servicio(c.servicio).nombre)}</td><td class="n">${fmt(totalSimple(c))}</td><td class="n">${c.enUso?fmt(Object.values(c.enUso).reduce((a,b)=>a+num(b),0)):'—'}</td><td>${esc(c.conto||'')}</td><td>${esc(c.superviso||'')}</td><td style="white-space:nowrap"><button class="btn sec sm edit-only" onclick="abrirConteo('${c.id}')">Editar</button> <button class="btn red sm edit-only" onclick="borrarRegistro('conteos','${c.id}')">✕</button></td></tr>`).join('')}</table>`:'<div class="empty">Sin conteos registrados.</div>';
+}
+
+/* ---------- Stock del proveedor e inventario físico ---------- */
+function ultimoConteoUso(sid,hasta){
+  const H=hastaTs(hasta);
+  return DB.conteos.filter(c=>c.servicio===sid&&c.enUso&&tsDe(c)<=H).sort((a,b)=>tsDe(b).localeCompare(tsDe(a)))[0]||null;
+}
+/** Conciliación: stock entregado vs Paliativos + gabinetes + en uso + saldo en lavandería, al corte indicado. */
+function calcularConciliacion(hasta){
+  const SP=DB.config.stockProveedor||{items:{}};const pal=existenciaPaliativos(hasta);const sal=calcularSaldo(hasta);
+  const sv=serviciosStock();const niv={},uso={};sv.forEach(s=>{niv[s.id]=nivelServicio(s.id,hasta);uso[s.id]=ultimoConteoUso(s.id,hasta);});
+  const T={ent:0,pal:0,gab:0,uso:0,lav:0,tot:0,dif:0};const filas=[];
+  prendasActivas().forEach(p=>{
+    const ent=num((SP.items||{})[p.id]);const pa=Math.max(num(pal.items[p.id]),0);
+    let gab=0,us=0;sv.forEach(s=>{if(niv[s.id])gab+=num((niv[s.id].items||{})[p.id]);if(uso[s.id])us+=num(uso[s.id].enUso[p.id]);});
+    const lav=sal[p.id]?Math.max(sal[p.id].saldo,0):0;const tot=pa+gab+us+lav;
+    if(!ent&&!tot)return;
+    const f={pid:p.id,ent,pal:pa,gab,uso:us,lav,tot,dif:tot-ent};filas.push(f);Object.keys(T).forEach(k=>T[k]+=f[k]);
+  });
+  return {SP,filas,T,pal,sinGab:sv.filter(s=>!niv[s.id]),sinUso:sv.filter(s=>!uso[s.id]),uso,hasta};
+}
+function tablaConciliacion(K){
+  const P=DB.config.prendas;const hayEnt=K.T.ent>0;
+  return `<table><tr><th>Prenda</th><th class="n">Entregado por el proveedor</th><th class="n">Paliativos</th><th class="n">Gabinetes de servicios</th><th class="n">En uso en servicios</th><th class="n">En lavandería (saldo)</th><th class="n">Total localizado</th><th class="n">Diferencia</th></tr>
+  ${K.filas.length?K.filas.map(f=>`<tr><td>${esc((P.find(x=>x.id===f.pid)||{nombre:f.pid}).nombre)}</td><td class="n"><b>${f.ent?fmt(f.ent):'—'}</b></td><td class="n">${fmt(f.pal)}</td><td class="n">${fmt(f.gab)}</td><td class="n">${fmt(f.uso)}</td><td class="n">${fmt(f.lav)}</td><td class="n"><b>${fmt(f.tot)}</b></td><td class="n ${hayEnt&&f.dif<0?'bad':''}">${hayEnt?(f.dif>0?'+':'')+fmt(f.dif):'—'}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Sin stock del proveedor ni conteos registrados.</td></tr>'}
+  <tr class="tot"><td>Total</td><td class="n">${fmt(K.T.ent)}</td><td class="n">${fmt(K.T.pal)}</td><td class="n">${fmt(K.T.gab)}</td><td class="n">${fmt(K.T.uso)}</td><td class="n">${fmt(K.T.lav)}</td><td class="n">${fmt(K.T.tot)}</td><td class="n">${hayEnt?(K.T.dif>0?'+':'')+fmt(K.T.dif):'—'}</td></tr></table>`;
+}
+function renderConciliacion(){
+  const f=$('fConcil');if(!f.value)f.value=hoy();const K=calcularConciliacion(f.value);const SP=K.SP;
+  const av=[];
+  if(!K.T.ent)av.push('Aún no se registra el stock entregado por el proveedor'+(esAdmin()?': use “Registrar stock del proveedor”.':' (lo registra Compras y RH).'));
+  if(!K.pal.base)av.push('Falta el conteo de Paliativos.');
+  if(K.sinGab.length)av.push('Sin conteo de gabinete: '+K.sinGab.map(s=>esc(s.nombre)).join(', ')+'.');
+  if(K.sinUso.length)av.push('Sin conteo de ropa en uso: '+K.sinUso.map(s=>esc(s.nombre)).join(', ')+'.');
+  $('concilInfo').innerHTML=`<div class="muted">${K.T.ent?`Stock del proveedor: <b>${fmt(K.T.ent)} piezas</b>${SP.fecha?' · entregado el '+fFecha(SP.fecha):''}${SP.acta?' · acta/remisión '+esc(SP.acta):''}${SP.recibio?' · recibió '+esc(SP.recibio):''}`:''}</div>
+  ${av.length?`<div class="alert">${av.join('<br>')}</div>`:'<div class="note">Inventario completo: todas las áreas tienen conteo.</div>'}
+  <div class="note">Total localizado = Paliativos + gabinetes + ropa en uso + saldo en lavandería (enviado sin regresar). Para que la diferencia sea real, haga todos los conteos el mismo día y en el mismo horario, y registre como saldo inicial la ropa que esté en la lavandería en ese momento. Diferencia negativa = piezas que no se localizan.</div>`;
+  $('tabConcil').innerHTML=tablaConciliacion(K);
+}
+function abrirStockProveedor(){
+  if(!requiere('admin'))return;const SP=DB.config.stockProveedor||{items:{}};const vals={};Object.keys(SP.items||{}).forEach(p=>vals[p]={n:SP.items[p]});
+  abrirModal(`<h2>Stock entregado por el proveedor</h2>
+  <div class="row"><label class="f">Fecha de entrega<input type="date" id="spFecha" value="${SP.fecha||hoy()}"></label>
+  <label class="f">Acta / remisión<input id="spActa" value="${esc(SP.acta||'')}"></label>
+  <label class="f" style="flex:1">Recibió (nombre y área)<input id="spRec" value="${esc(SP.recibio||'')}"></label></div>
+  <div class="note">Capture las piezas que el proveedor entregó en comodato, según el acta de entrega. Es la base contra la que se compara el inventario físico y la que se devolverá al terminar el contrato.</div>
+  ${gridHTML([{k:'n',label:'Piezas entregadas'}],vals)}
+  <label class="f" style="margin-top:8px">Observaciones<textarea id="spObs">${esc(SP.obs||'')}</textarea></label>
+  <div class="mfoot"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" onclick="guardarStockProveedor()">Guardar stock</button></div>`);
+  totalGrid();
+}
+function guardarStockProveedor(){
+  if(!requiere('admin'))return;const g=leerGrid();const items={};Object.keys(g).forEach(p=>{if(num(g[p].n))items[p]=num(g[p].n);});
+  if(!Object.keys(items).length&&!confirm('No capturó piezas. ¿Guardar el stock en cero?'))return;
+  DB.config.stockProveedor={items,fecha:$('spFecha').value,acta:$('spActa').value.trim(),recibio:$('spRec').value.trim(),obs:$('spObs').value.trim(),registrado:new Date().toISOString()};
+  guardarConfig();cerrarModal();render();toast('Stock del proveedor guardado');
+}
+function imprimirConciliacion(){
+  const K=calcularConciliacion($('fConcil').value||hoy());const SP=K.SP;
+  ventanaImpresion('Conciliación del stock entregado por el proveedor',`<div class="meta"><div>Corte: <b>${fFecha(K.hasta)}</b></div><div>Entrega del proveedor: <b>${SP.fecha?fFecha(SP.fecha):'—'}</b></div><div>Acta / remisión: <b>${esc(SP.acta||'—')}</b></div></div>
+  ${tablaConciliacion(K)}
+  <p style="font-size:11px;color:#6B7280">Total localizado = Paliativos + gabinetes + ropa en uso + saldo en lavandería. Diferencia = total localizado − entregado (negativa = piezas no localizadas).${K.sinGab.length||K.sinUso.length||!K.pal.base?' Áreas sin conteo al corte: '+[...(!K.pal.base?['Paliativos']:[]),...new Set([...K.sinGab,...K.sinUso].map(s=>s.nombre))].join(', ')+'.':''}</p>
+  <div class="firmas"><div>Elaboró (Compras y RH)</div><div>Revisó (Supervisión de Enfermería)</div><div>Vo. Bo. (Dirección)</div></div>`);
+}
+function imprimirHojaInventario(){
+  const ps=prendasActivas();const g=grupos(ps);
+  const hoja=(s,i)=>{const pal=s.id==='roperia';return `<div style="${i?'page-break-before:always;':''}"><h2>${esc(s.nombre)}</h2>
+  <div class="meta"><div>Fecha: ____ / ____ / ______</div><div>Hora: ________</div><div>Turno: __________</div></div>
+  <table><tr><th>Prenda</th>${pal?'<th class="n" style="width:120px">Existencia limpia</th>':'<th class="n">Stock autorizado</th><th class="n" style="width:95px">Gabinete (limpia)</th><th class="n" style="width:95px">En uso</th><th class="n" style="width:95px">Total</th>'}<th>Observaciones</th></tr>
+  ${Object.keys(g).map(gr=>`<tr class="grp"><td colspan="${pal?3:6}">${esc(gr)}</td></tr>`+g[gr].map(p=>`<tr><td>${esc(p.nombre)}</td>${pal?'<td></td>':`<td class="n">${fmt(dotacionDe(s.id,p.id).efectiva)||''}</td><td></td><td></td><td></td>`}<td></td></tr>`).join('')).join('')}</table>
+  <p style="font-size:11px;color:#6B7280">${pal?'Cuente toda la ropa limpia de la ropería.':'Gabinete = ropa limpia guardada en el stock. En uso = ropa en camas (ocupadas o preparadas) y la que trae puesta cada paciente. No cuente la ropa sucia.'}</p>
+  <div class="firmas"><div>Contó</div><div>Supervisó (supervisión de enfermería)</div></div></div>`;};
+  const areas=[servicio('roperia'),...serviciosStock()].filter(Boolean);
+  ventanaImpresion('Inventario físico inicial de ropa',areas.map(hoja).join(''));
 }
 function guardarDotacion(){
   if(!requiere('admin'))return;const sid=$('selServ').value;const s=servicio(sid);
@@ -814,28 +904,44 @@ function guardarDotacion(){
 }
 function abrirConteo(id,sidF){
   if(!requiere(id?'admin':'sup'))return;const c=id?DB.conteos.find(x=>x.id===id):null;const sid=c?c.servicio:(sidF||$('selServ').value||'hosp');const vals={};
-  if(c)Object.keys(c.items).forEach(p=>vals[p]={n:c.items[p]});
-  abrirModal(`<h2>${c?'Editar conteo '+esc(c.folio):'Conteo físico de ropa limpia'}</h2>
-  <div class="row"><label class="f">Servicio<select id="cServ" onchange="dotEnConteo()">${serviciosActivos().map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.nombre)}</option>`).join('')}</select></label>
+  if(c){Object.keys(c.items||{}).forEach(p=>vals[p]={n:c.items[p]});Object.keys(c.enUso||{}).forEach(p=>(vals[p]=vals[p]||{}).u=c.enUso[p]);}
+  const g=grupos(prendasActivas());const v=(p,k)=>vals[p]&&num(vals[p][k])?num(vals[p][k]):'';
+  abrirModal(`<h2>${c?'Editar conteo '+esc(c.folio):'Conteo físico de ropa'}</h2>
+  <div class="row"><label class="f">Área<select id="cServ" onchange="dotEnConteo(true)">${serviciosActivos().map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.nombre)}</option>`).join('')}</select></label>
   ${htmlFH('c',c)}</div>
-  <div class="note">Cuente solo la ropa limpia: en un servicio, la de su gabinete; en Paliativos, toda la existencia. Deje en blanco las prendas que no hay; cuentan como 0. Para resurtir use “+ Resurtir un servicio” en la pestaña Paliativos.</div>
-  ${gridHTML([{k:'n',label:'Conteo'}],vals)}
+  <label id="cUsoBox" style="display:block;margin-top:8px;font-weight:600;color:var(--navy)"><input type="checkbox" id="cUsoChk" onchange="dotEnConteo()" ${c?(c.enUso?'checked':''):''}> Incluir la ropa en uso (camas ocupadas y pacientes) — inventario completo</label>
+  <div class="note" id="cNota"></div>
+  <div class="tw" style="max-height:52vh;overflow-y:auto"><table id="tabCnt"><tr><th>Prenda</th><th class="n" id="thDot">Stock autorizado</th><th class="n" id="thN">Gabinete (limpia)</th><th class="n col-uso">En uso</th><th class="n col-uso">Total servicio</th></tr>
+  ${Object.keys(g).map(gr=>`<tr class="grp"><td colspan="5">${esc(gr)}</td></tr>`+g[gr].map(p=>`<tr data-cp="${p.id}"><td>${esc(p.nombre)}</td><td class="n muted cdot"></td>
+    <td class="n"><input type="number" min="0" step="1" data-p="${p.id}" data-k="n" value="${v(p.id,'n')}" oninput="totalGrid()"></td>
+    <td class="n col-uso"><input type="number" min="0" step="1" data-p="${p.id}" data-k="u" value="${v(p.id,'u')}" oninput="totalGrid()"></td><td class="n col-uso ctot"></td></tr>`).join('')).join('')}
+  <tr class="tot"><td>Total</td><td class="n" id="tg-dot"></td><td class="n" id="tg-n">0</td><td class="n col-uso" id="tg-u">0</td><td class="n col-uso" id="tg-t">0</td></tr></table></div>
   <div class="row" style="margin-top:10px"><label class="f" style="flex:1">Contó<input id="cConto" value="${esc(c?c.conto:'')}"></label><label class="f" style="flex:1">Supervisó<input id="cSup" value="${esc(c?c.superviso:'')}"></label></div>
   <label class="f" style="margin-top:8px">Observaciones<textarea id="cObs">${esc(c?c.obs:'')}</textarea></label>
   <div class="mfoot"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" onclick="guardarConteo('${c?c.id:''}')">Guardar conteo</button></div>`);
-  document.querySelectorAll('#modalBox table tr').forEach(tr=>{if(tr.querySelector('th'))tr.insertAdjacentHTML('beforeend','<th class="n">Stock</th>');
-    else if(tr.querySelector('input[data-p]'))tr.insertAdjacentHTML('beforeend','<td class="n muted cdot"></td>');else tr.insertAdjacentHTML('beforeend','<td></td>');});
-  document.querySelectorAll('#modalBox tr.grp td').forEach((td,i)=>{if(i%2===0)td.colSpan=3;else td.remove();});
-  dotEnConteo();totalGrid();
+  dotEnConteo(!c);totalGrid();
 }
-function dotEnConteo(){const sid=$('cServ').value;document.querySelectorAll('#modalBox tr').forEach(tr=>{const i=tr.querySelector('input[data-p]');const td=tr.querySelector('.cdot');if(i&&td){const d=dotacionDe(sid,i.dataset.p).efectiva;td.textContent=d?fmt(d):'—';}});}
+/** Ajusta el formulario de conteo al área elegida. auto=true: marca "en uso" si el servicio aún no tiene inventario con ropa en uso. */
+function dotEnConteo(auto){
+  const sid=$('cServ').value;const pal=sid==='roperia';
+  if(auto&&!pal)$('cUsoChk').checked=!DB.conteos.some(x=>x.servicio===sid&&x.enUso);
+  const uso=!pal&&$('cUsoChk').checked;
+  $('cUsoBox').style.display=pal?'none':'block';$('tabCnt').classList.toggle('sin-uso',!uso);
+  $('thN').textContent=pal?'Existencia (limpia)':'Gabinete (limpia)';$('thDot').textContent=pal?'—':'Stock autorizado';
+  $('cNota').innerHTML=pal?'Paliativos: cuente <b>toda</b> la ropa limpia que hay en la ropería. Deje en blanco las prendas que no hay; cuentan como 0.'
+    :uso?'Cuente por separado: <b>Gabinete</b> = ropa limpia guardada en el stock del servicio; <b>En uso</b> = ropa puesta en camas (ocupadas o preparadas) y la que trae puesta cada paciente. La ropa sucia en carros o bolsas no se cuenta aquí: va en el siguiente envío a lavandería.'
+    :'Cuente solo la ropa limpia del gabinete del servicio. Deje en blanco las prendas que no hay; cuentan como 0.';
+  let td=0;document.querySelectorAll('#tabCnt tr[data-cp]').forEach(tr=>{const d=pal?0:dotacionDe(sid,tr.dataset.cp).efectiva;td+=d;tr.querySelector('.cdot').textContent=d?fmt(d):'—';});
+  $('tg-dot').textContent=td?fmt(td):'—';totalGrid();
+}
 function guardarConteo(id){
   if(!requiere(id?'admin':'sup'))return;
-  const g=leerGrid();const items={};Object.keys(g).forEach(p=>items[p]=num(g[p].n));
+  const g=leerGrid();const items={};Object.keys(g).forEach(p=>{if(num(g[p].n))items[p]=num(g[p].n);});
   const sid=$('cServ').value;const prev=id?DB.conteos.find(x=>x.id===id):null;const FH=leerFH('c',prev);const fecha=FH.fecha;if(!fecha){toast('Indique la fecha');return;}
   const rec={id:prev?prev.id:uid(),folio:prev?prev.folio:siguienteFolio('conteos','CNT',fecha),tipo:'Conteo',fecha,hora:FH.hora,registrado:FH.registrado,tardia:FH.tardia,servicio:sid,servicioNombre:servicio(sid).nombre,items,conto:$('cConto').value.trim(),superviso:$('cSup').value.trim(),obs:$('cObs').value.trim()};
   if(sid==='roperia'){const t=existenciaPaliativos(tsDe(rec),rec.id);if(t.base)rec.teorico=t.items;else delete rec.teorico;}
-  rec.resumen=resumenItems(items,v=>v);
+  if(sid!=='roperia'&&$('cUsoChk').checked){const u={};Object.keys(g).forEach(p=>{if(num(g[p].u))u[p]=num(g[p].u);});rec.enUso=u;rec.tipo='Inventario';}
+  rec.resumen=resumenItems(items,v=>v)+(rec.enUso&&Object.keys(rec.enUso).length?' | En uso: '+resumenItems(rec.enUso,v=>v):'');
   guardarRegistro('conteos',rec);cerrarModal();toast('Conteo '+rec.folio+' guardado');
 }
 
