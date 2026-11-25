@@ -820,7 +820,7 @@ function renderDotacion(){
   $('tabStockMatriz').innerHTML=`<table><tr><th>Prenda</th>${sv.map(x=>`<th class="n">${esc(x.nombre)}</th>`).join('')}<th class="n">Total</th></tr>${prendasActivas().map(p=>{let t=0;const cells=sv.map(x=>{const d=dotacionDe(x.id,p.id).efectiva;t+=d;tot[x.id]=(tot[x.id]||0)+d;return `<td class="n">${d?fmt(d):'—'}</td>`;}).join('');return `<tr><td>${esc(p.nombre)}</td>${cells}<td class="n"><b>${fmt(t)}</b></td></tr>`;}).join('')}
     <tr class="tot"><td>Total</td>${sv.map(x=>`<td class="n">${fmt(tot[x.id]||0)}</td>`).join('')}<td class="n">${fmt(Object.values(tot).reduce((a,b)=>a+b,0))}</td></tr></table>`;
   const L=DB.conteos.slice().sort((a,b)=>(b.fecha+(b.hora||'')).localeCompare(a.fecha+(a.hora||'')));
-  $('tabConteos').innerHTML=L.length?`<table><tr><th>Folio</th><th>Fecha</th><th>Área</th><th class="n">Gabinete / existencia</th><th class="n">En uso</th><th>Contó</th><th>Supervisó</th><th></th></tr>${L.map(c=>`<tr><td><b>${esc(c.folio)}</b></td><td>${fFecha(c.fecha)} ${esc(c.hora||'')}</td><td>${esc(servicio(c.servicio).nombre)}</td><td class="n">${fmt(totalSimple(c))}</td><td class="n">${c.enUso?fmt(Object.values(c.enUso).reduce((a,b)=>a+num(b),0)):'—'}</td><td>${esc(c.conto||'')}</td><td>${esc(c.superviso||'')}</td><td style="white-space:nowrap"><button class="btn sec sm edit-only" onclick="abrirConteo('${c.id}')">Editar</button> <button class="btn red sm edit-only" onclick="borrarRegistro('conteos','${c.id}')">✕</button></td></tr>`).join('')}</table>`:'<div class="empty">Sin conteos registrados.</div>';
+  $('tabConteos').innerHTML=L.length?`<table><tr><th>Folio</th><th>Fecha</th><th>Área</th><th class="n">Piezas contadas</th><th>Contó</th><th>Supervisó</th><th></th></tr>${L.map(c=>`<tr><td><b>${esc(c.folio)}</b>${c.enUso?' <span class="pill ok" title="Incluye ropa en uso">Inventario inicial</span>':''}</td><td>${fFecha(c.fecha)} ${esc(c.hora||'')}</td><td>${esc(servicio(c.servicio).nombre)}</td><td class="n">${fmt(totalSimple(c)+Object.values(c.enUso||{}).reduce((x,y)=>x+num(y),0))}</td><td>${esc(c.conto||'')}</td><td>${esc(c.superviso||'')}</td><td style="white-space:nowrap"><button class="btn sec sm edit-only" onclick="abrirConteo('${c.id}')">Editar</button> <button class="btn red sm edit-only" onclick="borrarRegistro('conteos','${c.id}')">✕</button></td></tr>`).join('')}</table>`:'<div class="empty">Sin conteos registrados.</div>';
 }
 
 /* ---------- Stock del proveedor e inventario físico ---------- */
@@ -906,10 +906,10 @@ function abrirConteo(id,sidF){
   if(!requiere(id?'admin':'sup'))return;const c=id?DB.conteos.find(x=>x.id===id):null;const sid=c?c.servicio:(sidF||$('selServ').value||'hosp');const vals={};
   if(c){Object.keys(c.items||{}).forEach(p=>vals[p]={n:c.items[p]});Object.keys(c.enUso||{}).forEach(p=>(vals[p]=vals[p]||{}).u=c.enUso[p]);}
   const g=grupos(prendasActivas());const v=(p,k)=>vals[p]&&num(vals[p][k])?num(vals[p][k]):'';
-  abrirModal(`<h2>${c?'Editar conteo '+esc(c.folio):'Conteo físico de ropa'}</h2>
-  <div class="row"><label class="f">Área<select id="cServ" onchange="dotEnConteo(true)">${serviciosActivos().map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.nombre)}</option>`).join('')}</select></label>
+  abrirModal(`<h2 id="cTit">${c?'Editar conteo '+esc(c.folio):'Conteo físico de ropa'}</h2>
+  <div class="row"><label class="f">Área<select id="cServ" data-id="${c?c.id:''}" onchange="dotEnConteo(true)">${serviciosActivos().map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.nombre)}</option>`).join('')}</select></label>
   ${htmlFH('c',c)}</div>
-  <label id="cUsoBox" style="display:block;margin-top:8px;font-weight:600;color:var(--navy)"><input type="checkbox" id="cUsoChk" onchange="dotEnConteo()" ${c?(c.enUso?'checked':''):''}> Incluir la ropa en uso (camas ocupadas y pacientes) — inventario completo</label>
+  <label id="cUsoBox" style="display:block;margin-top:8px;font-weight:600;color:var(--navy)"><input type="checkbox" id="cUsoChk" onchange="dotEnConteo()" ${c?(c.enUso?'checked':''):''}> Inventario completo: incluir la ropa en uso (solo para auditoría o devolución al proveedor)</label>
   <div class="note" id="cNota"></div>
   <div class="tw" style="max-height:52vh;overflow-y:auto"><table id="tabCnt"><tr><th>Prenda</th><th class="n" id="thDot">Stock autorizado</th><th class="n" id="thN">Gabinete (limpia)</th><th class="n col-uso">En uso</th><th class="n col-uso">Total servicio</th></tr>
   ${Object.keys(g).map(gr=>`<tr class="grp"><td colspan="5">${esc(gr)}</td></tr>`+g[gr].map(p=>`<tr data-cp="${p.id}"><td>${esc(p.nombre)}</td><td class="n muted cdot"></td>
@@ -924,12 +924,21 @@ function abrirConteo(id,sidF){
 /** Ajusta el formulario de conteo al área elegida. auto=true: marca "en uso" si el servicio aún no tiene inventario con ropa en uso. */
 function dotEnConteo(auto){
   const sid=$('cServ').value;const pal=sid==='roperia';
-  if(auto&&!pal)$('cUsoChk').checked=!DB.conteos.some(x=>x.servicio===sid&&x.enUso);
+  const eid=$('cServ').dataset.id;const ed=eid?DB.conteos.find(x=>x.id===eid):null;
+  // La ropa en uso solo se cuenta en el inventario inicial de cada servicio. En los conteos de rutina no aparece.
+  const pend=!DB.conteos.some(x=>x.servicio===sid&&x.enUso&&x.id!==eid);
+  let mostrarChk=false;
+  if(pal)$('cUsoChk').checked=false;
+  else if(ed&&ed.servicio===sid)$('cUsoChk').checked=!!ed.enUso;
+  else if(pend)$('cUsoChk').checked=true;
+  else if(esAdmin()){mostrarChk=true;if(auto)$('cUsoChk').checked=false;}
+  else $('cUsoChk').checked=false;
   const uso=!pal&&$('cUsoChk').checked;
-  $('cUsoBox').style.display=pal?'none':'block';$('tabCnt').classList.toggle('sin-uso',!uso);
+  $('cUsoBox').style.display=mostrarChk?'block':'none';$('tabCnt').classList.toggle('sin-uso',!uso);
+  if(!ed)$('cTit').textContent=pal?'Conteo físico de Paliativos':uso&&pend?'Inventario inicial del servicio':uso?'Inventario completo del servicio':'Conteo de rutina del gabinete';
   $('thN').textContent=pal?'Existencia (limpia)':'Gabinete (limpia)';$('thDot').textContent=pal?'—':'Stock autorizado';
   $('cNota').innerHTML=pal?'Paliativos: cuente <b>toda</b> la ropa limpia que hay en la ropería. Deje en blanco las prendas que no hay; cuentan como 0.'
-    :uso?'Cuente por separado: <b>Gabinete</b> = ropa limpia guardada en el stock del servicio; <b>En uso</b> = ropa puesta en camas (ocupadas o preparadas) y la que trae puesta cada paciente. La ropa sucia en carros o bolsas no se cuenta aquí: va en el siguiente envío a lavandería.'
+    :uso?(pend?'<b>Inventario inicial</b> (solo esta vez, para cuadrar con el stock del proveedor). ':'')+'Cuente por separado: <b>Gabinete</b> = ropa limpia guardada en el stock del servicio; <b>En uso</b> = ropa puesta en camas (ocupadas o preparadas) y la que trae puesta cada paciente. La ropa sucia en carros o bolsas no se cuenta aquí: va en el siguiente envío a lavandería.'
     :'Cuente solo la ropa limpia del gabinete del servicio. Deje en blanco las prendas que no hay; cuentan como 0.';
   let td=0;document.querySelectorAll('#tabCnt tr[data-cp]').forEach(tr=>{const d=pal?0:dotacionDe(sid,tr.dataset.cp).efectiva;td+=d;tr.querySelector('.cdot').textContent=d?fmt(d):'—';});
   $('tg-dot').textContent=td?fmt(td):'—';totalGrid();
