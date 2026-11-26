@@ -170,7 +170,7 @@ body.rol-sup nav button.no-sup{display:none}
     <div class="tw" id="tabConcil"></div>
     <div class="row" style="margin-top:10px"><div class="sp"></div>
       <button class="btn sec" onclick="imprimirHojaInventario()">🖨 Hojas de inventario físico</button>
-      <button class="btn sec" onclick="imprimirConciliacion()">🖨 Conciliación</button>
+      <button class="btn sec" onclick="imprimirConciliacion()">🖨 Ropa en circulación</button>
       <button class="btn navy edit-only" onclick="abrirStockProveedor()">Registrar stock del proveedor</button>
       <button class="btn acc-sup" onclick="abrirConteo()">+ Registrar conteo</button></div>
   </div>
@@ -849,17 +849,33 @@ function tablaConciliacion(K){
   ${K.filas.length?K.filas.map(f=>`<tr><td>${esc((P.find(x=>x.id===f.pid)||{nombre:f.pid}).nombre)}</td><td class="n"><b>${f.ent?fmt(f.ent):'—'}</b></td><td class="n">${fmt(f.pal)}</td><td class="n">${fmt(f.gab)}</td><td class="n">${fmt(f.uso)}</td><td class="n">${fmt(f.lav)}</td><td class="n"><b>${fmt(f.tot)}</b></td><td class="n ${hayEnt&&f.dif<0?'bad':''}">${hayEnt?(f.dif>0?'+':'')+fmt(f.dif):'—'}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Sin stock del proveedor ni conteos registrados.</td></tr>'}
   <tr class="tot"><td>Total</td><td class="n">${fmt(K.T.ent)}</td><td class="n">${fmt(K.T.pal)}</td><td class="n">${fmt(K.T.gab)}</td><td class="n">${fmt(K.T.uso)}</td><td class="n">${fmt(K.T.lav)}</td><td class="n">${fmt(K.T.tot)}</td><td class="n">${hayEnt?(K.T.dif>0?'+':'')+fmt(K.T.dif):'—'}</td></tr></table>`;
 }
+/** Momento del inventario completo: el conteo con ropa en uso más reciente. */
+function corteInventario(){
+  const L=DB.conteos.filter(c=>c.enUso).map(tsDe).sort();return L.length?L[L.length-1]:null;
+}
+/** Ropa en uso / en circulación calculada: Entregado − Paliativos − Gabinetes − Lavandería. */
+function tablaCirculacion(K,ref){
+  const P=DB.config.prendas;const hayEnt=K.T.ent>0;let tc=0,tr=0;
+  const R={};if(ref)ref.filas.forEach(f=>R[f.pid]=f.uso);
+  const filas=K.filas.map(f=>({...f,circ:f.ent-f.pal-f.gab-f.lav}));
+  return `<table><tr><th>Prenda</th><th class="n">Entregado por el proveedor</th><th class="n">Paliativos</th><th class="n">Gabinetes de servicios</th><th class="n">En lavandería (saldo)</th><th class="n">En uso / en circulación (calculado)</th>${ref?'<th class="n">En uso contado en el inventario</th>':''}</tr>
+  ${filas.length?filas.map(f=>{tc+=f.circ;if(ref)tr+=num(R[f.pid]);return `<tr><td>${esc((P.find(x=>x.id===f.pid)||{nombre:f.pid}).nombre)}</td><td class="n"><b>${f.ent?fmt(f.ent):'—'}</b></td><td class="n">${fmt(f.pal)}</td><td class="n">${fmt(f.gab)}</td><td class="n">${fmt(f.lav)}</td><td class="n ${hayEnt&&f.circ<0?'bad':''}"><b>${hayEnt?fmt(f.circ):'—'}</b></td>${ref?`<td class="n muted">${fmt(num(R[f.pid]))}</td>`:''}</tr>`;}).join(''):'<tr><td colspan="7" class="empty">Sin stock del proveedor ni conteos registrados.</td></tr>'}
+  <tr class="tot"><td>Total</td><td class="n">${fmt(K.T.ent)}</td><td class="n">${fmt(K.T.pal)}</td><td class="n">${fmt(K.T.gab)}</td><td class="n">${fmt(K.T.lav)}</td><td class="n">${hayEnt?fmt(tc):'—'}</td>${ref?`<td class="n">${fmt(tr)}</td>`:''}</tr></table>`;
+}
 function renderConciliacion(){
   const f=$('fConcil');if(!f.value)f.value=hoy();const K=calcularConciliacion(f.value);const SP=K.SP;
+  const cI=corteInventario();const A=cI?calcularConciliacion(cI):null;
   const av=[];
   if(!K.T.ent)av.push('Aún no se registra el stock entregado por el proveedor'+(esAdmin()?': use “Registrar stock del proveedor”.':' (lo registra Compras y RH).'));
   if(!K.pal.base)av.push('Falta el conteo de Paliativos.');
   if(K.sinGab.length)av.push('Sin conteo de gabinete: '+K.sinGab.map(s=>esc(s.nombre)).join(', ')+'.');
-  if(K.sinUso.length)av.push('Sin conteo de ropa en uso: '+K.sinUso.map(s=>esc(s.nombre)).join(', ')+'.');
+  const neg=K.T.ent?K.filas.filter(x=>x.ent-x.pal-x.gab-x.lav<0):[];
+  if(neg.length)av.push('En circulación negativa: '+neg.map(x=>esc(prenda(x.pid).nombre)).join(', ')+'. Hay más piezas registradas de las que se entregaron: revise conteos, recepciones o surtidos de esa prenda.');
   $('concilInfo').innerHTML=`<div class="muted">${K.T.ent?`Stock del proveedor: <b>${fmt(K.T.ent)} piezas</b>${SP.fecha?' · entregado el '+fFecha(SP.fecha):''}${SP.acta?' · acta/remisión '+esc(SP.acta):''}${SP.recibio?' · recibió '+esc(SP.recibio):''}`:''}</div>
-  ${av.length?`<div class="alert">${av.join('<br>')}</div>`:'<div class="note">Inventario completo: todas las áreas tienen conteo.</div>'}
-  <div class="note">Total localizado = Paliativos + gabinetes + ropa en uso + saldo en lavandería (enviado sin regresar). Para que la diferencia sea real, haga todos los conteos el mismo día y en el mismo horario, y registre como saldo inicial la ropa que esté en la lavandería en ese momento. Diferencia negativa = piezas que no se localizan.</div>`;
-  $('tabConcil').innerHTML=tablaConciliacion(K);
+  ${A?`<div class="row" style="margin:8px 0;padding:10px 12px;border:1px solid var(--line,#DDE3EA);border-left:4px solid var(--navy,#1B3A6B);border-radius:6px;align-items:center"><div><b style="color:var(--navy,#1B3A6B)">Inventario inicial</b> · corte ${fFecha(cI.slice(0,10))} ${esc(cI.slice(11,16))}<br><span class="muted">Entregado ${fmt(A.T.ent)} · localizado ${fmt(A.T.tot)} (con ${fmt(A.T.uso)} piezas en uso contadas) · diferencia <b class="${A.T.dif<0?'bad':''}">${A.T.dif>0?'+':''}${fmt(A.T.dif)}</b></span></div><div class="sp"></div><button class="btn sec sm" onclick="imprimirActaInventario()">🖨 Acta del inventario inicial</button></div>`:''}
+  ${av.length?`<div class="alert">${av.join('<br>')}</div>`:''}
+  <div class="note">La ropa en uso cambia todo el día (ingresos, egresos, cambios de habitación), por eso no se cuenta: se calcula. <b>En uso / en circulación</b> = Entregado − Paliativos − Gabinetes − En lavandería. Incluye la ropa en camas y pacientes y la sucia que aún no se envía. Las pérdidas reales solo se detectan con un inventario completo (recomendado cada 3 meses y en la devolución al proveedor).</div>`;
+  $('tabConcil').innerHTML=tablaCirculacion(K,A);
 }
 function abrirStockProveedor(){
   if(!requiere('admin'))return;const SP=DB.config.stockProveedor||{items:{}};const vals={};Object.keys(SP.items||{}).forEach(p=>vals[p]={n:SP.items[p]});
@@ -880,10 +896,17 @@ function guardarStockProveedor(){
   guardarConfig();cerrarModal();render();toast('Stock del proveedor guardado');
 }
 function imprimirConciliacion(){
-  const K=calcularConciliacion($('fConcil').value||hoy());const SP=K.SP;
-  ventanaImpresion('Conciliación del stock entregado por el proveedor',`<div class="meta"><div>Corte: <b>${fFecha(K.hasta)}</b></div><div>Entrega del proveedor: <b>${SP.fecha?fFecha(SP.fecha):'—'}</b></div><div>Acta / remisión: <b>${esc(SP.acta||'—')}</b></div></div>
+  const h=$('fConcil').value||hoy();const K=calcularConciliacion(h);const SP=K.SP;const cI=corteInventario();const A=cI?calcularConciliacion(cI):null;
+  ventanaImpresion('Ropa del proveedor en circulación',`<div class="meta"><div>Corte: <b>${fFecha(h)}</b></div><div>Entrega del proveedor: <b>${SP.fecha?fFecha(SP.fecha):'—'}</b></div><div>Acta / remisión: <b>${esc(SP.acta||'—')}</b></div></div>
+  ${tablaCirculacion(K,A)}
+  <p style="font-size:11px;color:#6B7280">En uso / en circulación = Entregado − Paliativos − Gabinetes − En lavandería (calculado; incluye ropa en camas, pacientes y sucia pendiente de envío). Un valor negativo indica un error de registro en esa prenda.</p>
+  <div class="firmas"><div>Elaboró (Compras y RH)</div><div>Revisó (Supervisión de Enfermería)</div></div>`);
+}
+function imprimirActaInventario(){
+  const cI=corteInventario();if(!cI){toast('No hay inventario con ropa en uso');return;}const K=calcularConciliacion(cI);const SP=K.SP;
+  ventanaImpresion('Acta de inventario físico inicial de ropa del proveedor',`<div class="meta"><div>Corte del inventario: <b>${fFecha(cI.slice(0,10))} ${esc(cI.slice(11,16))}</b></div><div>Entrega del proveedor: <b>${SP.fecha?fFecha(SP.fecha):'—'}</b></div><div>Acta / remisión: <b>${esc(SP.acta||'—')}</b></div></div>
   ${tablaConciliacion(K)}
-  <p style="font-size:11px;color:#6B7280">Total localizado = Paliativos + gabinetes + ropa en uso + saldo en lavandería. Diferencia = total localizado − entregado (negativa = piezas no localizadas).${K.sinGab.length||K.sinUso.length||!K.pal.base?' Áreas sin conteo al corte: '+[...(!K.pal.base?['Paliativos']:[]),...new Set([...K.sinGab,...K.sinUso].map(s=>s.nombre))].join(', ')+'.':''}</p>
+  <p style="font-size:11px;color:#6B7280">Total localizado = Paliativos + gabinetes + ropa en uso (contada en el inventario) + saldo en lavandería. Diferencia = total localizado − entregado (negativa = piezas no localizadas). Esta acta es la base para la devolución de la ropa al proveedor al terminar el contrato.</p>
   <div class="firmas"><div>Elaboró (Compras y RH)</div><div>Revisó (Supervisión de Enfermería)</div><div>Vo. Bo. (Dirección)</div></div>`);
 }
 function imprimirHojaInventario(){
