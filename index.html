@@ -67,6 +67,8 @@ body:not(.rol-admin):not(.rol-sup) .acc-sup{display:none!important}
 #tabCnt.sin-uso .col-uso{display:none}
 body.rol-vig nav button.no-vig{display:none}
 body.rol-sup nav button.no-sup{display:none}
+body.rol-sup .no-sup-el{display:none!important}
+body:not(.rol-sup) .solo-sup{display:none!important}
 .rolchip{font-weight:700}
 .note{background:#F0F7F5;border-left:3px solid var(--teal);padding:8px 10px;font-size:12px;border-radius:4px;margin:8px 0}
 .alert{background:var(--redbg);border-left:3px solid var(--red);padding:8px 10px;font-size:12px;border-radius:4px;margin:8px 0}
@@ -91,7 +93,7 @@ body.rol-sup nav button.no-sup{display:none}
   <button data-p="recepciones" class="no-sup">Recepciones</button>
   <button data-p="paliativos" class="no-vig">Paliativos</button>
   <button data-p="saldo" class="no-vig no-sup">Saldo en lavandería</button>
-  <button data-p="dotacion" class="no-vig">Stock y conteos</button>
+  <button data-p="dotacion" class="no-vig no-sup">Stock y conteos</button>
   <button data-p="concentrado" class="no-vig no-sup">Concentrado</button>
   <button data-p="config" class="no-vig no-sup">Configuración</button>
 </nav>
@@ -131,15 +133,20 @@ body.rol-sup nav button.no-sup{display:none}
 
 <!-- PALIATIVOS -->
 <section class="page" id="p-paliativos">
-  <div class="card">
+  <div class="card solo-sup" style="text-align:center;padding:34px 20px">
+    <h2 style="margin:0 0 6px">Resurtido de servicios</h2>
+    <div class="muted" style="margin-bottom:18px">Cuente el gabinete del servicio, revise lo que propone la app y capture lo que realmente entrega desde Paliativos.</div>
+    <button class="btn" style="font-size:18px;padding:14px 28px" onclick="nuevoSurtido()">+ Resurtir un servicio</button>
+  </div>
+  <div class="card no-sup-el">
     <div class="row"><h2 style="margin:0">Existencia en Paliativos (ropería)</h2><div class="sp"></div>
-      <button class="btn acc-sup" onclick="abrirSurtido()">+ Resurtir un servicio</button>
+      <button class="btn acc-sup" onclick="nuevoSurtido()">+ Resurtir un servicio</button>
       <button class="btn sec acc-sup" onclick="abrirConteo(null,'roperia')">+ Conteo físico de Paliativos</button></div>
     <div class="note">Existencia = último conteo físico de Paliativos + ropa limpia aceptada que entró después − lo surtido a los servicios después. Se actualiza sola con cada recepción y cada resurtido.</div>
     <div class="row muted" id="palInfo" style="margin:6px 0"></div>
     <div class="tw" id="tabPaliativos"></div>
   </div>
-  <div class="card">
+  <div class="card no-sup-el">
     <div class="row"><h2 style="margin:0">Movimientos de Paliativos</h2><div class="sp"></div><select id="fPalMes" onchange="renderPaliativos()"></select></div>
     <div class="tw" id="tabKardex" style="margin-top:10px"></div>
   </div>
@@ -428,21 +435,29 @@ function ultimoConteo(sid,hasta){
   return DB.conteos.filter(c=>c.servicio===sid&&tsDe(c)<=H).sort((a,b)=>tsDe(b).localeCompare(tsDe(a)))[0]||null;
 }
 /** Nivel conocido de un servicio: el conteo o resurtido más reciente (tras resurtir = conteo + surtido). */
+/** ¿El registro incluye esta prenda? Los conteos parciales solo cubren las prendas que se contaron. */
+function cubre(r,p){return !r.parcial||(r.prendas||[]).includes(p);}
+function prendasDeRegistros(L){const k=new Set(prendasActivas().map(p=>p.id));L.forEach(r=>{Object.keys(r.items||{}).forEach(x=>k.add(x));Object.keys(r.conteo||{}).forEach(x=>k.add(x));});return [...k];}
+/** Nivel del gabinete por prenda: el conteo o resurtido más reciente que incluya esa prenda. */
 function nivelServicio(sid,hasta){
-  const H=hastaTs(hasta);const c=ultimoConteo(sid,H);
-  const s=DB.surtidos.filter(x=>x.servicio===sid&&tsDe(x)<=H).sort((a,b)=>tsDe(b).localeCompare(tsDe(a)))[0]||null;
-  if(s&&(!c||tsDe(s)>=tsDe(c))){const items={};const k=new Set([...Object.keys(s.conteo||{}),...Object.keys(s.items||{})]);k.forEach(p=>items[p]=num((s.conteo||{})[p])+num((s.items||{})[p]));
-    return {fecha:s.fecha,hora:s.hora,items,fuente:'Resurtido '+s.folio};}
-  return c?{fecha:c.fecha,hora:c.hora,items:c.items||{},fuente:'Conteo '+c.folio}:null;
+  const H=hastaTs(hasta);
+  const L=[...DB.conteos.filter(x=>x.servicio===sid&&tsDe(x)<=H).map(x=>({r:x,t:'c'})),...DB.surtidos.filter(x=>x.servicio===sid&&tsDe(x)<=H).map(x=>({r:x,t:'s'}))]
+    .sort((a,b)=>tsDe(b.r).localeCompare(tsDe(a.r))||(a.t==='s'?-1:1));
+  if(!L.length)return null;const items={};
+  prendasDeRegistros(L.map(x=>x.r)).forEach(p=>{const f=L.find(x=>cubre(x.r,p));if(!f)return;
+    const v=f.t==='s'?num((f.r.conteo||{})[p])+num((f.r.items||{})[p]):num((f.r.items||{})[p]);if(v)items[p]=v;});
+  const u=L[0];return {fecha:u.r.fecha,hora:u.r.hora,items,fuente:(u.t==='s'?'Resurtido ':'Conteo ')+u.r.folio};
 }
 /** Existencia teórica en Paliativos a una fecha/hora. excluirId: conteo que se está guardando. */
 function existenciaPaliativos(hasta,excluirId){
   const H=hastaTs(hasta);
-  const base=DB.conteos.filter(c=>c.servicio==='roperia'&&c.id!==excluirId&&tsDe(c)<=H).sort((a,b)=>tsDe(b).localeCompare(tsDe(a)))[0]||null;
-  const B=base?tsDe(base):'';const items={},ent={},sal={};
-  if(base)Object.keys(base.items||{}).forEach(p=>items[p]=num(base.items[p]));
-  DB.recepciones.filter(r=>tsDe(r)>B&&tsDe(r)<=H).forEach(r=>Object.keys(r.items||{}).forEach(p=>{const a=num(r.items[p].a);ent[p]=(ent[p]||0)+a;items[p]=(items[p]||0)+a;}));
-  DB.surtidos.filter(s=>tsDe(s)>B&&tsDe(s)<=H).forEach(s=>Object.keys(s.items||{}).forEach(p=>{const q=num(s.items[p]);sal[p]=(sal[p]||0)+q;items[p]=(items[p]||0)-q;}));
+  const C=DB.conteos.filter(c=>c.servicio==='roperia'&&c.id!==excluirId&&tsDe(c)<=H).sort((a,b)=>tsDe(b).localeCompare(tsDe(a)));
+  const base=C[0]||null;const items={},ent={},sal={};if(!base)return {base,items,ent,sal};
+  const bases={};prendasDeRegistros(C).forEach(p=>{const b=C.find(c=>cubre(c,p));if(b)bases[p]=b;});
+  const B=p=>bases[p]?tsDe(bases[p]):'';
+  Object.keys(bases).forEach(p=>{const v=num((bases[p].items||{})[p]);if(v)items[p]=v;});
+  DB.recepciones.filter(r=>tsDe(r)<=H).forEach(r=>Object.keys(r.items||{}).forEach(p=>{if(tsDe(r)<=B(p))return;const a=num(r.items[p].a);ent[p]=(ent[p]||0)+a;items[p]=(items[p]||0)+a;}));
+  DB.surtidos.filter(s=>tsDe(s)<=H).forEach(s=>Object.keys(s.items||{}).forEach(p=>{if(tsDe(s)<=B(p))return;const q=num(s.items[p]);sal[p]=(sal[p]||0)+q;items[p]=(items[p]||0)-q;}));
   return {base,items,ent,sal};
 }
 /** Cobertura por servicio: {sid:{conteo, filas:[{pid,dot,cont,cob}], cobGlobal, bajo}} */
@@ -492,7 +507,7 @@ function aplicarModo(){
   document.body.classList.remove('rol-admin','rol-sup','rol-vig');if(ROL)document.body.classList.add('rol-'+ROL);
   $('modoTxt').textContent=ROL?ROL_NOMBRE[ROL]:'Solo lectura';$('btnPin').textContent=ROL?'🔓 Salir':'🔒 Entrar con PIN';
   if(ROL==='vig'){const act=(document.querySelector('.page.act')||{}).id;if(act!=='p-envios'&&act!=='p-recepciones')irA('recepciones');}
-  if(ROL==='sup'){const act=(document.querySelector('.page.act')||{}).id;if(act!=='p-paliativos'&&act!=='p-dotacion')irA('paliativos');}
+  if(ROL==='sup'){const act=(document.querySelector('.page.act')||{}).id;if(act!=='p-paliativos')irA('paliativos');}
 }
 function pedirPin(){
   if(ROL){ROL='';sessionStorage.removeItem('ropa_rol');aplicarModo();render();return;}
@@ -716,6 +731,12 @@ function renderPaliativos(){
     <td class="n">${x.tipo==='Conteo'?fmt(x.q):(x.q>0?'+':'')+fmt(x.q)}</td><td class="muted">${esc(x.det)}</td><td>${esc(x.r.entrego&&x.col==='surtidos'?x.r.entrego:(x.r.recibio||x.r.conto||''))}</td>
     <td style="white-space:nowrap">${x.col==='surtidos'?`<button class="btn sec sm" onclick="imprimirSurtido('${x.r.id}')">🖨 Vale</button> <button class="btn sec sm edit-only" onclick="abrirSurtido(null,'${x.r.id}')">Editar</button> <button class="btn red sm edit-only" onclick="borrarRegistro('surtidos','${x.r.id}')">✕</button>`:''}${x.col==='conteos'?`<button class="btn sec sm edit-only" onclick="abrirConteo('${x.r.id}')">Editar</button> <button class="btn red sm edit-only" onclick="borrarRegistro('conteos','${x.r.id}')">✕</button>`:''}</td></tr>`).join('')}</table>`:'<div class="empty">Sin movimientos en el periodo.</div>';
 }
+/** Antes de resurtir, descarga los registros más recientes para que la existencia de Paliativos esté al día. */
+async function nuevoSurtido(sid){
+  if(!requiere('sup'))return;
+  if(GAS_URL&&navigator.onLine){toast('Actualizando existencias…');try{await sincronizar();}catch(e){}}
+  abrirSurtido(sid);
+}
 function abrirSurtido(sid,id){
   if(!requiere(id?'admin':'sup'))return;const s=id?DB.surtidos.find(x=>x.id===id):null;
   sid=s?s.servicio:(sid||serviciosStock()[0].id);
@@ -821,13 +842,13 @@ function renderDotacion(){
   $('tabStockMatriz').innerHTML=`<table><tr><th>Prenda</th>${sv.map(x=>`<th class="n">${esc(x.nombre)}</th>`).join('')}<th class="n">Total</th></tr>${prendasActivas().map(p=>{let t=0;const cells=sv.map(x=>{const d=dotacionDe(x.id,p.id).efectiva;t+=d;tot[x.id]=(tot[x.id]||0)+d;return `<td class="n">${d?fmt(d):'—'}</td>`;}).join('');return `<tr><td>${esc(p.nombre)}</td>${cells}<td class="n"><b>${fmt(t)}</b></td></tr>`;}).join('')}
     <tr class="tot"><td>Total</td>${sv.map(x=>`<td class="n">${fmt(tot[x.id]||0)}</td>`).join('')}<td class="n">${fmt(Object.values(tot).reduce((a,b)=>a+b,0))}</td></tr></table>`;
   const L=DB.conteos.slice().sort((a,b)=>(b.fecha+(b.hora||'')).localeCompare(a.fecha+(a.hora||'')));
-  $('tabConteos').innerHTML=L.length?`<table><tr><th>Folio</th><th>Fecha</th><th>Área</th><th class="n">Piezas contadas</th><th>Contó</th><th>Supervisó</th><th></th></tr>${L.map(c=>`<tr><td><b>${esc(c.folio)}</b>${c.enUso?' <span class="pill ok" title="Incluye ropa en uso">Inventario inicial</span>':''}</td><td>${fFecha(c.fecha)} ${esc(c.hora||'')}</td><td>${esc(servicio(c.servicio).nombre)}</td><td class="n">${fmt(totalSimple(c)+Object.values(c.enUso||{}).reduce((x,y)=>x+num(y),0))}</td><td>${esc(c.conto||'')}</td><td>${esc(c.superviso||'')}</td><td style="white-space:nowrap"><button class="btn sec sm edit-only" onclick="abrirConteo('${c.id}')">Editar</button> <button class="btn red sm edit-only" onclick="borrarRegistro('conteos','${c.id}')">✕</button></td></tr>`).join('')}</table>`:'<div class="empty">Sin conteos registrados.</div>';
+  $('tabConteos').innerHTML=L.length?`<table><tr><th>Folio</th><th>Fecha</th><th>Área</th><th class="n">Piezas contadas</th><th>Contó</th><th>Supervisó</th><th></th></tr>${L.map(c=>`<tr><td><b>${esc(c.folio)}</b>${c.parcial?' <span class="pill" title="Solo estas prendas">Parcial: '+esc((c.prendas||[]).map(x=>prenda(x).nombre).join(', '))+'</span>':c.enUso?' <span class="pill ok" title="Incluye ropa en uso">Inventario inicial</span>':''}</td><td>${fFecha(c.fecha)} ${esc(c.hora||'')}</td><td>${esc(servicio(c.servicio).nombre)}</td><td class="n">${fmt(totalSimple(c)+Object.values(c.enUso||{}).reduce((x,y)=>x+num(y),0))}</td><td>${esc(c.conto||'')}</td><td>${esc(c.superviso||'')}</td><td style="white-space:nowrap"><button class="btn sec sm edit-only" onclick="abrirConteo('${c.id}')">Editar</button> <button class="btn red sm edit-only" onclick="borrarRegistro('conteos','${c.id}')">✕</button></td></tr>`).join('')}</table>`:'<div class="empty">Sin conteos registrados.</div>';
 }
 
 /* ---------- Stock del proveedor e inventario físico ---------- */
-function ultimoConteoUso(sid,hasta){
+function ultimoConteoUso(sid,hasta,p){
   const H=hastaTs(hasta);
-  return DB.conteos.filter(c=>c.servicio===sid&&c.enUso&&tsDe(c)<=H).sort((a,b)=>tsDe(b).localeCompare(tsDe(a)))[0]||null;
+  return DB.conteos.filter(c=>c.servicio===sid&&c.enUso&&tsDe(c)<=H&&(p?cubre(c,p):!c.parcial)).sort((a,b)=>tsDe(b).localeCompare(tsDe(a)))[0]||null;
 }
 /** Conciliación: stock entregado vs Paliativos + gabinetes + en uso + saldo en lavandería, al corte indicado. */
 /**
@@ -840,21 +861,21 @@ function ultimoConteoUso(sid,hasta){
 function calcularConciliacion(hasta,soloContado){
   const H=hastaTs(hasta);
   const SP=DB.config.stockProveedor||{items:{}};const pal=existenciaPaliativos(hasta);const sal=calcularSaldo(hasta);
-  const sv=serviciosStock();const niv={},uso={},surtDesde={};
-  sv.forEach(s=>{niv[s.id]=nivelServicio(s.id,hasta);uso[s.id]=ultimoConteoUso(s.id,hasta);
-    const inv=uso[s.id];const o=surtDesde[s.id]={};
-    if(inv)DB.surtidos.filter(x=>x.servicio===s.id&&tsDe(x)>tsDe(inv)&&tsDe(x)<=H).forEach(x=>Object.keys(x.items||{}).forEach(p=>o[p]=(o[p]||0)+num(x.items[p])));});
-  // Envíos a partir del cierre del inventario (último conteo con ropa en uso): así el cálculo parte exactamente del acta.
-  const invTs=sv.map(s=>uso[s.id]).filter(Boolean).map(tsDe).sort();const desde=invTs[invTs.length-1]||null;
-  const env={};if(desde&&!soloContado)DB.envios.filter(e=>tsDe(e)>desde&&tsDe(e)<=H).forEach(e=>Object.keys(e.items||{}).forEach(p=>env[p]=(env[p]||0)+num(e.items[p].c)+num(e.items[p].x)));
-  const T={ent:0,pal:0,gab:0,uso:0,lav:0,tot:0,dif:0};const filas=[];
+  const sv=serviciosStock();const niv={},uso={};
+  sv.forEach(s=>{niv[s.id]=nivelServicio(s.id,hasta);uso[s.id]=ultimoConteoUso(s.id,hasta);});
+  const T={ent:0,pal:0,gab:0,uso:0,lav:0,tot:0,dif:0};const filas=[];let desde=null;
   prendasActivas().forEach(p=>{
     const ent=num((SP.items||{})[p.id]);const pa=num(pal.items[p.id]);
+    // Inventario de referencia por servicio para esta prenda (el último completo o parcial que la incluya; en el acta, solo completos)
+    const inv={};sv.forEach(s=>inv[s.id]=soloContado?uso[s.id]:ultimoConteoUso(s.id,hasta,p.id));
+    const ts=sv.map(s=>inv[s.id]).filter(Boolean).map(tsDe).sort();const dP=ts[ts.length-1]||null;if(dP&&(!desde||dP>desde))desde=dP;
     let gab=0,us=0,usoCont=0;
-    sv.forEach(s=>{const g=niv[s.id]?num((niv[s.id].items||{})[p.id]):0;gab+=g;const inv=uso[s.id];if(!inv)return;
-      const u0=num(inv.enUso[p.id]);usoCont+=u0;
-      us+=soloContado?u0:u0+num((inv.items||{})[p.id])+num(surtDesde[s.id][p.id])-g;});
-    if(!soloContado)us-=num(env[p.id]);
+    sv.forEach(s=>{const g=niv[s.id]?num((niv[s.id].items||{})[p.id]):0;gab+=g;const c=inv[s.id];if(!c)return;
+      const u0=num(c.enUso[p.id]);usoCont+=u0;if(soloContado){us+=u0;return;}
+      const S=DB.surtidos.filter(x=>x.servicio===s.id&&tsDe(x)>tsDe(c)&&tsDe(x)<=H).reduce((a,x)=>a+num((x.items||{})[p.id]),0);
+      us+=u0+num((c.items||{})[p.id])+S-g;});
+    // Ropa enviada a lavandería después del inventario de esta prenda
+    if(!soloContado&&dP)us-=DB.envios.filter(e=>tsDe(e)>dP&&tsDe(e)<=H).reduce((a,e)=>a+(e.items[p.id]?num(e.items[p.id].c)+num(e.items[p.id].x):0),0);
     const lav=sal[p.id]?sal[p.id].saldo:0;const tot=pa+gab+us+lav;
     if(!ent&&!tot&&!usoCont)return;
     const f={pid:p.id,ent,pal:pa,gab,uso:us,usoCont,lav,tot,dif:tot-ent};filas.push(f);['ent','pal','gab','uso','lav','tot','dif'].forEach(k=>T[k]+=f[k]);
@@ -869,7 +890,7 @@ function tablaConciliacion(K){
 }
 /** Momento del inventario completo: el conteo con ropa en uso más reciente. */
 function corteInventario(){
-  const L=DB.conteos.filter(c=>c.enUso).map(tsDe).sort();return L.length?L[L.length-1]:null;
+  const L=DB.conteos.filter(c=>c.enUso&&!c.parcial).map(tsDe).sort();return L.length?L[L.length-1]:null;
 }
 function renderConciliacion(){
   const f=$('fConcil');if(!f.value)f.value=hoy();const K=calcularConciliacion(f.value);const SP=K.SP;
@@ -939,11 +960,12 @@ function guardarDotacion(){
 function abrirConteo(id,sidF){
   if(!requiere(id?'admin':'sup'))return;const c=id?DB.conteos.find(x=>x.id===id):null;const sid=c?c.servicio:(sidF||$('selServ').value||'hosp');const vals={};
   if(c){Object.keys(c.items||{}).forEach(p=>vals[p]={n:c.items[p]});Object.keys(c.enUso||{}).forEach(p=>(vals[p]=vals[p]||{}).u=c.enUso[p]);}
-  const g=grupos(prendasActivas());const v=(p,k)=>vals[p]&&num(vals[p][k])?num(vals[p][k]):'';
+  const g=grupos(prendasActivas());const v=(p,k)=>vals[p]&&num(vals[p][k])?num(vals[p][k]):(c&&c.parcial&&cubre(c,p)&&(k==='n'||c.enUso)?0:'');
   abrirModal(`<h2 id="cTit">${c?'Editar conteo '+esc(c.folio):'Conteo físico de ropa'}</h2>
   <div class="row"><label class="f">Área<select id="cServ" data-id="${c?c.id:''}" onchange="dotEnConteo(true)">${serviciosActivos().map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.nombre)}</option>`).join('')}</select></label>
   ${htmlFH('c',c)}</div>
   <label id="cUsoBox" style="display:block;margin-top:8px;font-weight:600;color:var(--navy)"><input type="checkbox" id="cUsoChk" onchange="dotEnConteo()" ${c?(c.enUso?'checked':''):''}> Inventario completo: incluir la ropa en uso (solo para auditoría o devolución al proveedor)</label>
+  <label id="cParBox" style="display:${esAdmin()?'block':'none'};margin-top:6px;font-weight:600;color:var(--navy)"><input type="checkbox" id="cParChk" onchange="dotEnConteo()" ${c&&c.parcial?'checked':''}> Conteo parcial: solo las prendas que capture (las que deje en blanco no cambian)</label>
   <div class="note" id="cNota"></div>
   <div class="tw" style="max-height:52vh;overflow-y:auto"><table id="tabCnt"><tr><th>Prenda</th><th class="n" id="thDot">Stock autorizado</th><th class="n" id="thN">Gabinete (limpia)</th><th class="n col-uso">En uso</th><th class="n col-uso">Total servicio</th></tr>
   ${Object.keys(g).map(gr=>`<tr class="grp"><td colspan="5">${esc(gr)}</td></tr>`+g[gr].map(p=>`<tr data-cp="${p.id}"><td>${esc(p.nombre)}</td><td class="n muted cdot"></td>
@@ -974,17 +996,22 @@ function dotEnConteo(auto){
   $('cNota').innerHTML=pal?'Paliativos: cuente <b>toda</b> la ropa limpia que hay en la ropería. Deje en blanco las prendas que no hay; cuentan como 0.'
     :uso?(pend?'<b>Inventario inicial</b> (solo esta vez, para cuadrar con el stock del proveedor). ':'')+'Cuente por separado: <b>Gabinete</b> = ropa limpia guardada en el stock del servicio; <b>En uso</b> = ropa puesta en camas (ocupadas o preparadas) y la que trae puesta cada paciente. La ropa sucia en carros o bolsas no se cuenta aquí: va en el siguiente envío a lavandería.'
     :'Cuente solo la ropa limpia del gabinete del servicio. Deje en blanco las prendas que no hay; cuentan como 0.';
+  if($('cParChk').checked)$('cNota').innerHTML='<b>Conteo parcial.</b> Capture solo las prendas que contó, escribiendo <b>0</b> donde no haya ninguna pieza. Las prendas que deje en blanco conservan su último conteo.'+(uso?' Al incluir la ropa en uso, este conteo se vuelve el nuevo punto de partida del cálculo de ropa en uso de esas prendas.':'');
   let td=0;document.querySelectorAll('#tabCnt tr[data-cp]').forEach(tr=>{const d=pal?0:dotacionDe(sid,tr.dataset.cp).efectiva;td+=d;tr.querySelector('.cdot').textContent=d?fmt(d):'—';});
   $('tg-dot').textContent=td?fmt(td):'—';totalGrid();
 }
 function guardarConteo(id){
   if(!requiere(id?'admin':'sup'))return;
   const g=leerGrid();const items={};Object.keys(g).forEach(p=>{if(num(g[p].n))items[p]=num(g[p].n);});
+  const parcial=$('cParChk').checked;let prendasP=[];
+  if(parcial){const k=new Set();document.querySelectorAll('#tabCnt input[data-p]').forEach(i=>{if(i.value.trim()!==''&&(i.dataset.k==='n'||$('cUsoChk').checked))k.add(i.dataset.p);});prendasP=[...k];
+    if(!prendasP.length){toast('Capture al menos una prenda (0 si no hay)');return;}}
   const sid=$('cServ').value;const prev=id?DB.conteos.find(x=>x.id===id):null;const FH=leerFH('c',prev);const fecha=FH.fecha;if(!fecha){toast('Indique la fecha');return;}
   const rec={id:prev?prev.id:uid(),folio:prev?prev.folio:siguienteFolio('conteos','CNT',fecha),tipo:'Conteo',fecha,hora:FH.hora,registrado:FH.registrado,tardia:FH.tardia,servicio:sid,servicioNombre:servicio(sid).nombre,items,conto:$('cConto').value.trim(),superviso:$('cSup').value.trim(),obs:$('cObs').value.trim()};
   if(sid==='roperia'){const t=existenciaPaliativos(tsDe(rec),rec.id);if(t.base)rec.teorico=t.items;else delete rec.teorico;}
   if(sid!=='roperia'&&$('cUsoChk').checked){const u={};Object.keys(g).forEach(p=>{if(num(g[p].u))u[p]=num(g[p].u);});rec.enUso=u;rec.tipo='Inventario';}
-  rec.resumen=resumenItems(items,v=>v)+(rec.enUso&&Object.keys(rec.enUso).length?' | En uso: '+resumenItems(rec.enUso,v=>v):'');
+  if(parcial){rec.parcial=true;rec.prendas=prendasP;rec.tipo=(rec.enUso?'Inventario':'Conteo')+' parcial';}else{delete rec.parcial;delete rec.prendas;}
+  rec.resumen=parcial?'Parcial: '+prendasP.map(x=>prenda(x).nombre+' '+num(items[x])+(rec.enUso?' (en uso '+num(rec.enUso[x])+')':'')).join(' · '):resumenItems(items,v=>v)+(rec.enUso&&Object.keys(rec.enUso).length?' | En uso: '+resumenItems(rec.enUso,v=>v):'');
   guardarRegistro('conteos',rec);cerrarModal();toast('Conteo '+rec.folio+' guardado');
 }
 
